@@ -53,7 +53,17 @@ Two failure modes to handle:
 -> Empty Wardrobe(wardrobe["items] is []): don't crash instead prompt the LLM for general styling advice for the items without specific wardrobe pieces. Return something like "No wardrobe items found. Here is how people generally style this piece..."
 -> LLM returns empty string: Return a fallback string like "Couldn't generate outfit suggestion - try again"
 
+LLM prompt for this section:
+You are a personal stylist. The user just found this thrifted item:
+Title: {new_item['title']}
+Style tags: {new_item['style_tags']}
+Colors: {new_item['colors']}
 
+Their current wardrobe contains:
+{formatted list of wardrobe items}
+
+Suggest 1-2 complete outfits using pieces from their wardrobe paired with the new item.
+Be specific about which wardrobe pieces to combine. Keep it under 100 words.
 ---
 
 ### Tool 3: create_fit_card
@@ -68,12 +78,24 @@ Takes the outfit suggestions and the new ite, then calls LLM to generate short, 
 
 **What it returns:**
 <!-- Describe the return value -->
+A non empty string, 1-3 sentences, casual social media caption styel. Should vary each time even for same input.
 
 **What happens if it fails or returns nothing:**
 <!-- What should the agent do if the outfit data is incomplete? -->
+Two failure modes:
+-> Empty outfit string(outfit =="" or outfit.strip()==""): return an error string immediately without calling the LLM - "Cannot create fit card: outfit description is missing" 
 
+--> LLM returns rempty string: returning fallback - "Couldn't generate fit card- try again" 
 ---
+LLM prompt for this section:
 
+You are writing a casual Instagram caption for a thrifted outfit.
+The person just bought: {new_item['title']} for ${new_item['price']} from {new_item['platform']}
+Their outfit: {outfit}
+
+Write 1-3 sentences in a casual, lowercase, social media style.
+Be specific about the item and price. Use 1-2 emojis max. 
+Do NOT sound like a product description.
 ### Additional Tools (if any)
 
 <!-- Copy the block above for any tools beyond the required three -->
@@ -81,17 +103,70 @@ Takes the outfit suggestions and the new ite, then calls LLM to generate short, 
 ---
 
 ## Planning Loop
+This is the brain of the agent. 
+Concept: The planning loop is a function that runs the tools in sequence BUT checks the result after each one before deciding to continue. Think of it like a series of gates:
+
+Gate 1: Did search_listings find anything?
+  → No: stop, tell user, return
+  → Yes: continue to Gate 2
+
+Gate 2: Did suggest_outfit return something useful?
+  → No: stop, tell user, return  
+  → Yes: continue to Gate 3
+
+Gate 3: Did create_fit_card return something useful?
+  → No: tell user fit card failed but show outfit suggestion
+  → Yes: return everything to user
 
 **How does your agent decide which tool to call next?**
 <!-- Describe the logic your planning loop uses. What does it look at? What conditions change its behavior? How does it know when it's done? -->
+The planning loop runs inside run_agent(query,wardrobe) in agent.py. It follows the exact conditional logic:
 
+Step1: Parse the user's query to extract description, size, and max_price. Call search_listings(description,size, max_price). If results is [] then set session["error"] to a helpful message, set session["fit_card"] and session["outfit_suggestion"] to None, return session immediately. Do NOT proceed. But if the result is not empty set session["selected_item]= result[0] (top result) continue.
+
+Step2: Call suggest_outfit(session["selected_item"],wardrobe). If the result is empty string: set session["error"] to "Outfit Suggestion failed", return session. DO NOT proceed. If the result is non empty string: set session["outfit_suggestion"] = result, continue
+
+Step3: Call create_fit_card(session["outfit_suggestion"], session["selected_item"])
+IF results is an error string: set session["error"] to result but KEEP session["outfit_suggestion"]- show the user the outfit suggestion even if the fit card has failed.
+If result is non empty: set session["fit_card"] = result, return session
+
+
+
+Why results[0]? The search returns a ranked list — most relevant first. The agent picks the top result automatically. In a real product you might let the user choose, but for this project picking the best match keeps the flow clean.
+
+Why keep outfit_suggestion even if create_fit_card fails? Partial success is better than total failure. The user still gets something useful. This is a real design principle in agents — degrade gracefully, don't wipe out everything on one failure.
 ---
 
 ## State Management
+The agent maintains the single session dict created at the start of run_agent(). 
+It starts as:
+session = {
+    "query": query,
+    "selected_item": None,
+    "outfit_suggestion": None,
+    "fit_card": None,
+    "error": None
+}
+
+
+
 
 **How does information from one tool get passed to the next?**
 <!-- Describe how your agent stores and accesses state within a session. What data is tracked? How is it passed between tool calls? -->
+State flows like this:
 
+After search_listings succeeds: session["selected_item"] is set to results[0]
+suggest_outfit receives session["selected_item"] directly as its new_item argument
+After suggest_outfit succeeds: session["outfit_suggestion"] is set to the returned string
+create_fit_card receives both session["outfit_suggestion"] and session["selected_item"] as arguments
+After create_fit_card succeeds: session["fit_card"] is set to the returned string
+If any tool fails: session["error"] is set to a descriptive message
+
+The completed session dict is returned from run_agent() and app.py maps each key to its output panel in the Gradio UI.
+
+Why a dict instead of separate variables? A dict is easy to pass around, inspect, and return as one object. When run_agent() returns session, app.py can pull out exactly what it needs for each UI panel — search result, outfit suggestion, fit card — all from one object.
+
+Why initialize everything to None? So app.py can always safely check session["fit_card"] without a KeyError, even if the agent stopped early. None means "this step didn't complete" which is different from an empty string or missing key.
 ---
 
 ## Error Handling
@@ -100,9 +175,9 @@ For each tool, describe the specific failure mode you're handling and what the a
 
 | Tool | Failure mode | Agent response |
 |------|-------------|----------------|
-| search_listings | No results match the query | |
-| suggest_outfit | Wardrobe is empty | |
-| create_fit_card | Outfit input is missing or incomplete | |
+| search_listings | No results match the query | Set session["error"] = "No listings found for '[description]' in size [size] under $[max_price]. Try broader keywords, a different size, or a higher price limit." Return session immediately without calling further tools.|
+| suggest_outfit | Wardrobe is empty | Don't crash — call LLM anyway with a modified prompt asking for general styling advice without referencing specific wardrobe pieces. Return general advice string|
+| create_fit_card | Outfit input is missing or incomplete |Return error string immediately without calling LLM: "Cannot create fit card: outfit description is missing." Keep session["outfit_suggestion"] intact so user still sees the outfit suggestion. |
 
 ---
 
