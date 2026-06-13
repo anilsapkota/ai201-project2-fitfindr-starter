@@ -70,7 +70,32 @@ def search_listings(
     Before writing code, fill in the Tool 1 section of planning.md.
     """
     # Replace this with your implementation
-    return []
+    listings = load_listings()
+    desc_words = description.lower().split()
+    scored = []
+
+    for item in listings:
+        if max_price is not None and item["price"] > max_price:
+            continue
+        if size is not None and size.lower() not in item["size"].lower():
+            continue
+
+        blob = (
+            item["title"] + " " + item["description"] + " " +
+            " ".join(item["style_tags"])
+        ).lower()
+
+        score = sum(1 for word in desc_words if word in blob)
+
+        if score == 0:
+            continue
+
+        scored.append((score, item))
+
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+
+    return [item for score, item in scored]
+
 
 
 # ── Tool 2: suggest_outfit ────────────────────────────────────────────────────
