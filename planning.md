@@ -206,11 +206,15 @@ For each tool, describe the specific failure mode you're handling and what the a
      "I'll give Claude my Tool 1 spec (inputs, return value, failure mode) and ask it to implement
      search_listings() using load_listings() from the data loader — then test it against 3 queries
      before trusting it" is a plan. -->
+Tool 1 — search_listings: Give Claude the Tool 1 spec block from planning.md (inputs, return value, failure mode) plus this context: "use load_listings() from utils/data_loader.py — do not re-implement file loading. Filter by keyword match against title, description, and style_tags fields. Size and max_price can be None — skip those filters if so." Expect it to produce the complete function body. Verify before running: does it call load_listings()? Does it filter all three parameters? Does it return [] on no match instead of raising an exception? Test with 3 queries: one that should match, one that should return empty, one with no size or price filter.
+Tool 2 — suggest_outfit: Give Claude the Tool 2 spec block plus: "call Groq API with model llama-3.3-70b-versatile, load GROQ_API_KEY from .env using python-dotenv. Handle empty wardrobe by modifying the prompt, not by raising an error." Verify: does it construct a prompt using both new_item fields and wardrobe items? Does it handle wardrobe["items"] == [] without crashing? Test with get_example_wardrobe() and get_empty_wardrobe().
+Tool 3 — create_fit_card: Give Claude the Tool 3 spec block plus: "check for empty outfit string before calling LLM. Use higher temperature (0.9) so output varies. The prompt should sound like a social media caption, not a product description." Verify: does it guard against empty outfit string? Run it 3 times on same input — are outputs different? Does it include the item price and platform in the caption?
+
 
 **Milestone 3 — Individual tool implementations:**
 
 **Milestone 4 — Planning loop and state management:**
-
+Give Claude the full Architecture diagram from planning.md plus the Planning Loop and State Management sections. Ask it to implement run_agent() in agent.py following the session dict pattern exactly as specced. Verify before running: does it initialize session with all five keys set to None? Does it check if search_listings returns [] before calling suggest_outfit? Does it pass session["selected_item"] (not a hardcoded value) into suggest_outfit? Does it pass both session["outfit_suggestion"] AND session["selected_item"] into create_fit_card? Test the no-results branch explicitly with an impossible query.
 ---
 
 ## A Complete Interaction (Step by Step)
@@ -221,12 +225,21 @@ Write out what a full user interaction looks like from start to finish — tool 
 
 **Step 1:**
 <!-- What does the agent do first? Which tool is called? With what input? -->
-
+Agent parses query and calls search_listings(description="vintage graphic tee", size=None, max_price=30.0). load_listings() returns all listings, filtered to items where "vintage" or "graphic tee" appear in title, description, or style_tags, AND price ≤ 30.0. Returns a list of 1-3 matches sorted by relevance. Agent sets session["selected_item"] = results[0] — for example: {"title": "Y2K Baby Tee — Butterfly Print", "price": 18.0, "platform": "depop", "style_tags": ["y2k", "vintage", "graphic tee"], ...}
 **Step 2:**
 <!-- What happens next? What was returned from step 1? What tool is called now? -->
-
+Agent calls suggest_outfit(new_item=session["selected_item"], wardrobe=get_example_wardrobe()). Constructs a prompt with the tee's details and the wardrobe's 10 items. LLM returns: "Pair this Y2K butterfly tee with your baggy dark wash jeans and chunky white sneakers for an early 2000s throwback look. Tuck the front slightly and add your black crossbody to keep it casual." Agent sets session["outfit_suggestion"] = result.
 **Step 3:**
 <!-- Continue until the full interaction is complete -->
+Agent calls create_fit_card(outfit=session["outfit_suggestion"], new_item=session["selected_item"]). Constructs a prompt using the outfit string and item details (price: $18, platform: depop). LLM returns: "snagged this y2k butterfly tee off depop for $18 and it goes too hard with my baggy jeans 🦋 thrift szn never ends". Agent sets session["fit_card"] = result.
 
 **Final output to user:**
 <!-- What does the user actually see at the end? -->
+Gradio UI displays three panels:
+
+Search result panel: "Y2K Baby Tee — Butterfly Print — $18 — depop — excellent condition"
+Outfit suggestion panel: the styling advice string from Step 2
+Fit card panel: the caption string from Step 3
+Error panel: empty (no errors occurred)
+
+If user queries "designer ballgown size XXS under $5" — search_listings returns []. Agent sets session["error"] = "No listings found for 'designer ballgown' in size XXS under $5.00. Try broader keywords, a different size, or a higher price limit." Returns session immediately. suggest_outfit and create_fit_card are never called. Gradio shows only the error message.
