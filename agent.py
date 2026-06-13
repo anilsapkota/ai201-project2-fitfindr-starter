@@ -19,6 +19,24 @@ Usage (once implemented):
 """
 
 from tools import search_listings, suggest_outfit, create_fit_card
+import re 
+
+def _parse_query(query: str) -> dict:
+    """
+    Extract description, size, and max_price from a natural language query.
+    """
+    price_match = re.search(r"\$(\d+(?:\.\d+)?)", query)
+    max_price = float(price_match.group(1)) if price_match else None
+
+    size_match = re.search(r"size\s+(\w+)", query, re.IGNORECASE)
+    size = size_match.group(1) if size_match else None
+
+    return {
+        "description": query,
+        "size": size,
+        "max_price": max_price,
+    }
+
 
 
 # ── session state ─────────────────────────────────────────────────────────────
