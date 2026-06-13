@@ -102,7 +102,8 @@ def search_listings(
 
 def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
     """
-    Given a thrifted item and the user's wardrobe, suggest 1–2 complete outfits.
+    Given a thrifted item and the user's wardrobe, 
+    suggest 1–2 complete outfits.
 
     Args:
         new_item: A listing dict (the item the user is considering buying).
@@ -125,8 +126,44 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
 
     Before writing code, fill in the Tool 2 section of planning.md.
     """
-    # Replace this with your implementation
-    return ""
+    client = _get_groq_client()
+
+    item_desc = (
+        f"{new_item['title']} — {new_item['description']} "
+        f"(style: {', '.join(new_item['style_tags'])}, "
+        f"colors: {', '.join(new_item['colors'])})"
+    )
+
+    if not wardrobe["items"]:
+        prompt = (
+            f"A user is considering buying this thrifted item:\n{item_desc}\n\n"
+            f"They don't have any wardrobe items entered yet. Give general "
+            f"styling advice for this item — what kinds of pieces pair well "
+            f"with it and what vibe/aesthetic it suits. Keep it to 2-3 sentences."
+        )
+    else:
+        wardrobe_lines = []
+        for w_item in wardrobe["items"]:
+            tags_str = "/".join(w_item["style_tags"])
+            line = f"- {w_item['name']} ({w_item['category']}, {tags_str})"
+            wardrobe_lines.append(line)
+        wardrobe_text = "\n".join(wardrobe_lines)
+
+        prompt = (
+            f"A user is considering buying this thrifted item:\n{item_desc}\n\n"
+            f"Their current wardrobe contains:\n{wardrobe_text}\n\n"
+            f"Suggest 1-2 complete outfits combining this new item with specific "
+            f"pieces from their wardrobe. Name the wardrobe pieces directly. "
+            f"Keep it to 2-3 sentences."
+        )
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+    )
+
+    return response.choices[0].message.content
 
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
