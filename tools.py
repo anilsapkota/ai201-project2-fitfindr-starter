@@ -195,5 +195,27 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
 
     Before writing code, fill in the Tool 3 section of planning.md.
     """
-    # Replace this with your implementation
-    return ""
+    if not outfit or not outfit.strip():
+        return "Cannot create fit card: outfit description is missing."
+
+    client = _get_groq_client()
+
+    prompt = (
+        f"Write a short, casual social media caption (like an Instagram or "
+        f"TikTok OOTD post) for someone who just thrifted this item:\n"
+        f"- Item: {new_item['title']}\n"
+        f"- Price: ${new_item['price']}\n"
+        f"- Platform: {new_item['platform']}\n\n"
+        f"Their outfit: {outfit}\n\n"
+        f"Write 1-3 sentences, lowercase and casual tone, mention the item, "
+        f"price, and platform naturally. Use 1-2 emojis max. "
+        f"Do NOT sound like a product listing."
+    )
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.9,
+    )
+
+    return response.choices[0].message.content
