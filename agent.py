@@ -173,6 +173,11 @@ if __name__ == "__main__":
         print(f"Found: {session['selected_item']['title']}")
         print(f"\nOutfit: {session['outfit_suggestion']}")
         print(f"\nFit card: {session['fit_card']}")
+        print("\n=== State verification ===")
+        print(f"selected_item id: {session['selected_item']['id']}")
+        print(f"selected_item title: {session['selected_item']['title']}")
+        print(f"outfit_suggestion (first 50 chars): {session['outfit_suggestion'][:50]}...")
+        print(f"fit_card is not None: {session['fit_card'] is not None}")
 
     print("\n\n=== No-results path ===\n")
     session2 = run_agent(
