@@ -2,6 +2,9 @@
 
 FitFindr is an LLM-powered agent that finds secondhand clothing listings, suggests outfits built around your existing wardrobe, and writes a shareable "fit card" caption for your thrifted find.
 
+Link for video in action:
+https://www.loom.com/share/4c6fc02e261e4c68af47cdeb6b2ad834
+
 Describe what you're looking for in natural language — including size and price if you want to filter — and FitFindr runs a three-tool planning loop to return a top listing, an outfit idea, and a social-media-ready caption.
 
 ## How It Works
