@@ -110,9 +110,50 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     Before writing code, complete the Planning Loop and State Management sections
     of planning.md — your implementation should match what you described there.
     """
-    # TODO: implement the planning loop
+    # Step 1: initialize session
     session = _new_session(query, wardrobe)
-    session["error"] = "Planning loop not yet implemented."
+
+    # Step 2: parse the query
+    session["parsed"] = _parse_query(query)
+
+    # Step 3: call search_listings
+    results = search_listings(
+        description=session["parsed"]["description"],
+        size=session["parsed"]["size"],
+        max_price=session["parsed"]["max_price"],
+    )
+    session["search_results"] = results
+
+    if not results:
+        session["error"] = (
+            f"No listings found for '{session['parsed']['description']}'"
+            f" in size {session['parsed']['size']}"
+            f" under ${session['parsed']['max_price']}."
+            f" Try broader keywords, a different size, or a higher price limit."
+        )
+        return session
+
+    # Step 4: select top result
+    session["selected_item"] = results[0]
+
+    # Step 5: call suggest_outfit
+    outfit = suggest_outfit(session["selected_item"], wardrobe)
+    session["outfit_suggestion"] = outfit
+
+    if not outfit:
+        session["error"] = "Outfit suggestion failed."
+        return session
+
+    # Step 6: call create_fit_card
+    fit_card = create_fit_card(session["outfit_suggestion"], session["selected_item"])
+
+    if fit_card.startswith("Cannot create fit card"):
+        session["error"] = fit_card
+        # outfit_suggestion is preserved — partial success
+    else:
+        session["fit_card"] = fit_card
+
+    # Step 7: return session
     return session
 
 
